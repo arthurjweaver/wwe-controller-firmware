@@ -28,7 +28,7 @@ On a development machine with the Arduino IDE, permissions for all files in the 
 `updatefw.ino` is a bootloader program used to automate firmware updates over the web. This file also contains implementation notes.
 
 #### Arduino libraries
-Libraries used by this code are _not_ provided in this repository and must be downloaded either from the Arduino IDE or manually. Many are hosted on GitHub. Usage notes for all included libraries can be found in the `wwe.ino` preamble comments. A few libraries used by `wwe.ino` and `updatefw.ino` require minor modifications which are also documented in `wwe.ino`.
+Libraries used by this code are _not_ provided in this repository and must be downloaded either from the Arduino IDE or manually. Many are hosted on GitHub. Usage notes for all included libraries can be found in the `wwe.ino` preamble comments. A few libraries used by `wwe.ino` and `updatefw.ino` require minor modifications which are also documented in `wwe.ino`. Finally, there may be a few libraries which are no longer supported or that have been superseded by other libraries of the same name with incompatible code. Those libraries will be included in this repository as they're identified.
 
 #### Known issues
 
@@ -47,5 +47,30 @@ Rarely, during Ethernet access, the code has been observed to hang, and recovers
 
 Fortunately, there appear to be viable workarounds which will be implemented in the next update and noted here.
 
+#### Program description
+The code is built around a low-level timer interrupt which calls a function called `readADCs()` (see `adc.ino`) at a rate of 10000 Hz. `readADCs()` is itself time-sliced to perform various tasks at a rate of 1000 Hz. The rationale for this scheme is to accomplish the following:
 
+1. Within loop(), precise _once-per-second_ execution of:
+   - data reads - from attached devices via Modbus/RTU, Modbus/TCP, or direct Serial connection
+   - data writes - to the SD card on the Ethernet Shield 2
+   - data posts - via UDP packets sent to a (remote or local) "Data Server"
+
+2. Within loop(), at (still precise) rates much _slower_ than once-per-second, the firmware:
+   - sends and compares system configuration data saved on a (remote or local) "Update Server"
+   - checks for firmware updates on the Update Server
+   - monitors a National Weather Service API for alerts, warnings, or advisories (high winds)
+
+3. Outside of loop(), at rates up to 10000 Hz, `readADCs()` calls "critical" functions which:
+   - sample various raw voltages and currents from a 3-phase alternator (wind turbine)
+   - sample various device temperature sensors (anemometer, power board rectifier, logic board electronics)
+   - control a stepper motor (wind turbine tail motor)
+   - control output to a high-voltage load resistor (when needed to divert turbine power)
+   - compute "instantaneous" alternator rotational frequency (rpm)
+   - compute alternator energy production (Energy = Power * time)
+
+Within loop(), various timeouts are used to limit how much time data reads, writes and posts are allowed to take before moving on to the next loop() iteration. The idea is to complete execution of all loop() tasks (successful or not) in less than one second. The aim is to prevent data being "lost" due to blocking.
+
+Outside of loop(), the interrupt-driven, high-rate "critical" processes _always_ function at their intended rates whether or not loop() is slowed (or blocked) for any reason. This can be an important safety feature for managing a machine such as a wind turbine!
+
+Interestingly, the standard watchdog function will reboot the controller should loop() freeze up for any reason _regardless_ of the state of interrupt-driven tasks. However, a frozen interrupt-driven task **will not be detected** by the watchdog unless such a failure prevents loop() itself from executing. An open question is how such events might be detected and dealt with.
 
