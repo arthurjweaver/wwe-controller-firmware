@@ -23,12 +23,12 @@ $ ln -s updatefw.ino.arduino_due_x.bin updatefw.bin
 ```
 On a development machine with the Arduino IDE, permissions for all files in the working directory should be 755.
 
-**wwe.ino** is the _main_ module for all firmware code _except_ **updatefw.ino**. The beginning of **wwe.ino** contains extensive implementation notes. All code modules are extensively commented.
+`wwe.ino` is the _main_ module for all firmware code _except_ `updatefw.ino`. The beginning of `wwe.ino` contains extensive implementation notes. All code modules are extensively commented.
 
-**updatefw.ino** is a bootloader program used to automate firmware updates over the web. This file also contains implementation notes.
+`updatefw.ino` is a bootloader program used to automate firmware updates over the web. This file also contains implementation notes.
 
 #### Arduino libraries
-Libraries used by this code are _not_ provided in this repository and must be downloaded either from the Arduino IDE or manually. Many are hosted on GitHub. Usage notes for all included libraries can be found in the **wwe.ino** preamble comments. A few libraries used by **wwe.ino** and **updatefw.ino** require minor modifications which are also documented in **wwe.ino**.
+Libraries used by this code are _not_ provided in this repository and must be downloaded either from the Arduino IDE or manually. Many are hosted on GitHub. Usage notes for all included libraries can be found in the `wwe.ino` preamble comments. A few libraries used by `wwe.ino` and `updatefw.ino` require minor modifications which are also documented in `wwe.ino`.
 
 #### Known issues
 
@@ -38,7 +38,7 @@ The firmware uses Ethernet to:
 - send Modbus/TCP requests to a Nuvation BMS (port 502) - once per second
 - send system data via UDP to a data server (ports 58328, 58329, 58330, 58332) - once per second
 - send system configuration via UDP to an update server (port 58331) - once every few minutes
-- send HTTPS requests to the National Weather Service (NWS) API (port 443) - once per hour
+- send HTTPS requests to the [National Weather Service API](https://www.weather.gov/documentation/services-web-api) (port 443) - once per hour
 - send HTTP requests to a firmware update server (port 49152) - as needed
 
 Rarely, during Ethernet access, the code has been observed to hang, and recovers only when the watchdog timer times out. Efforts to track down this known problem are currently focused on dealing with "stuck sockets":
