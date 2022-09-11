@@ -1,6 +1,9 @@
 // ---------- webclient.ino ----------
 // HTTP and HTTPS GET and POST functions to send and retrieve data to/from a server.
 
+// This is used by showSocketStatus() below.
+#include "utility/w5100.h"
+
 // used in readHttp2File() and writeFileToFlash()
 #define BUFSIZE 4096
 
@@ -718,30 +721,104 @@ uint32_t getGPNVMBits(Efc* p_efc) {
 
 
 
-// Get Ethernet status. 
-//   ***Used in wwe.ino to set the ethernet_ok (global) flag***
+// Get Ethernet status.
 //   Ethernet.linkStatus() is a HARDWARE test. It will fail if the Ethernet cable is unplugged or bad.
 //   client.connect() is a SOFTWARE test to check if we can connect to a server.
-boolean EthernetOK() {
-  char cfg_addr[20];            // Update Server IP address string, e.g., "192.168.1.4"
-  uint16_t cfg_port;            // Update Server port, e.g., 80 or 49152
-  boolean ethernetOK = false;   // status flag
+boolean ethernetOK() {
+  char cfg_addr[20];                // Update Server IP address string, e.g., "192.168.1.4"
+  uint16_t cfg_port;                // Update Server port, e.g., 80 or 49152
+  static boolean ethernet_status = false;  // status flag, static!
+
+  // If Ethernet has failed, force socket disconnection - see socket.cpp
+  //   This is a WORKAROUND.
+  //   Rarely, the webserver attempts to establish a connection with itself!, hanging the code:
+  //     Socket 0 SYNSENT Port 80 ---> 192.168.1.238:61699 
+  //     Socket 1 ESTABLISHED Port 80 ---> 192.168.1.238:61849 
+  //   webclient: Ethernet.linkStatus() = 1, client.connect FAILED!
+  //   Still trying to track down the problem - in WebServer.h?
+  if ( !ethernet_status ) {
+    //W5100.execCmdSn(0, Sock_CLOSE);
+    //W5100.execCmdSn(1, Sock_CLOSE);
+  }
+
+  showSocketStatus();  // see function below
   
-  strcpy(cfg_addr, parm_cfg_ip.parmVal());  // get Update Server IP address from its parm
-  cfg_port = parm_cfg_port.intVal();        // get Update Server port from its parm
+  strcpy(cfg_addr, parm_cfg_ip.parmVal());  // get Update Server IP address from its parm (192.168.1.4)
+  cfg_port = parm_cfg_port.intVal();        // get Update Server port from its parm (49152)
 
   auto connecttime = micros();
   if ( client.connect(cfg_addr, cfg_port) ) {
-    Serial << "webclient: Ethernet.linkStatus() = " << Ethernet.linkStatus() << "\n";
-    Serial.print("webclient: testEthernet client.connect time = ");
+    Serial.print("webclient: Ethernet.linkStatus() = ");
+    Serial.print(Ethernet.linkStatus());
+    Serial.print(", client.connect time = ");
     Serial.print( ((float)(micros() - connecttime)/1000.), 3 );
     Serial.println(" msec");
-    ethernetOK = true;
+    ethernet_status = true;
   } else {
-    Serial << "webclient: Ethernet.linkStatus() = " << Ethernet.linkStatus() << "\n";
-    Serial << "webclient: testEthernet FAIL!\n";
-    ethernetOK = false;
+    Serial << "webclient: Ethernet.linkStatus() = " << Ethernet.linkStatus() << ", client.connect FAILED!\n";
+    ethernet_status = false;
+    while(1);  // ***DEAD END*** for DEBUG
   }
-  client.stop();  // returns nothing
-  return( ethernetOK );
+  client.flush();  // clear out any data
+  client.stop();   // stop client after (trying to) connect
+  return( ethernet_status );
+}
+
+
+
+// This function prints Ethernet socket status.
+//   In addition to this bit of code, there is a very interesting discussion here:
+//   see https://forum.arduino.cc/t/dealing-with-lost-arduino-ethernet-connectivity-stuck-sockets/244055/12
+//   Read it all the way to the end!
+//   Also see: https://github.com/arduino-libraries/Ethernet/issues/82
+void showSocketStatus() {
+
+  Serial << "webclient: showSocketStatus:\n";
+  for ( uint8_t i = 0; i < MAX_SOCK_NUM; i++ ) {
+    Serial.print("  Socket ");
+    Serial.print(i);
+    Serial.print(": ");
+    uint8_t s = W5100.readSnSR(i);  // get socket status code, see utility/w5100.h
+    switch ( s ) {
+      case 0x0:  Serial.print("CLOSED"); break;
+      case 0x13: Serial.print("INIT"); break;
+      case 0x14: Serial.print("LISTEN"); break;
+      case 0x15: Serial.print("SYNSENT"); break;
+      case 0x16: Serial.print("SYNRECV"); break;
+      case 0x17: Serial.print("ESTABLISHED"); break;
+      case 0x18: Serial.print("FIN_WAIT"); break;
+      case 0x1A: Serial.print("CLOSING"); break;
+      case 0x1B: Serial.print("TIME_WAIT"); break;
+      case 0x1C: Serial.print("CLOSE_WAIT"); break;
+      case 0x1D: Serial.print("LAST_ACK"); break;
+      case 0x22: Serial.print("UDP"); break;
+      case 0x32: Serial.print("IPRAW"); break;
+      case 0x42: Serial.print("MACRAW"); break;
+      case 0x5F: Serial.print("PPPOE"); break;
+      default: Serial.print("UNKNOWN");
+    }
+    Serial.print(" Port ");
+    Serial.print(W5100.readSnPORT(i));  // source port
+    Serial.print(" ---> ");
+    uint8_t dip[4];            // array of 8-bit ints (each 0-255)
+    W5100.readSnDIPR(i, dip);  // destination IP
+    for (int j = 0; j < 4; j++) {
+      Serial.print(dip[j]);  
+      if (j < 3) Serial.print(".");
+    }
+    Serial.print(":");
+    Serial.print(W5100.readSnDPORT(i));  // destination port
+    
+    if (W5100.readSnDPORT(i) == 123) Serial.println(" (NTP server)");
+    else if (W5100.readSnDPORT(i) == 58328) Serial.println(" (controller UDP --> data server)");
+    else if (W5100.readSnDPORT(i) == 58329) Serial.println(" (Modbus fast UDP --> data server)");
+    else if (W5100.readSnDPORT(i) == 58330) Serial.println(" (Modbus slow UDP --> data server)");
+    else if (W5100.readSnDPORT(i) == 58331) Serial.println(" (config UDP --> data server)");
+    else if (W5100.readSnDPORT(i) == 58332) Serial.println(" (Nuvation UDP --> data server)");
+    else if (W5100.readSnDPORT(i) == 49152) Serial.println(" (HTTP request --> data server)");
+    else if (W5100.readSnDPORT(i) == 443) Serial.println(" (HTTPS request --> API server)");
+    else if (W5100.readSnDPORT(i) == 502) Serial.println(" (Modbus/TCP request)");
+    else if (W5100.readSnDPORT(i) == 53) Serial.println(" (DNS server)");
+    else Serial.println();
+  }
 }

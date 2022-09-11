@@ -208,7 +208,7 @@ void initModbus() {
   // Get Nuvation Modbus/TCP data --> ***requires Ethernet***
   //   For Nuvation parm defs, see Energy-Storage-Information-Models_D3-2015-10-26-Update.xlsx spreadsheet.
   //   Scale factors are represented as powers of 10, e.g., -3 means divide by 1000.
-  if ( ethernet_ok ) {
+  if ( ethernetOK() ) {
     Serial << "wwe: Reading and setting Nuvation scale factors...\n";
     nuvation_Vol_SF.readReg(false);
     nuvation_MaxBatA_SF.readReg(false);

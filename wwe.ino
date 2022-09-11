@@ -46,7 +46,7 @@
 //   Sketch --> Export compiled Binary
 //
 // Open a Cygwin64 Terminal window and copy compiled binary (and source) from the PC to Mac server:
-//   cd /cygdrive/c/Users/SANDY/Documents/Arduino/wwe && scp * wwe@192.168.1.4:/Users/wwe/Sites/bin/firmware
+//   cd /cygdrive/c/Users/SANDY/Documents/Arduino/wwe && scp * wwe@192.168.1.4:/Users/wwe/Sites/WWE/bin/firmware
 //
 // TO FORCE A FIRMWARE UPDATE *ANYTIME*:
 //   1. Override Server? must be set to 0
@@ -116,8 +116,14 @@
 //   e.g., #include <EthernetLarge.h> or #include <Ethernet_Generic.h>
 // Tests so far with Ethernet_Generic and EthernetWebServer_SSL libraries generate compile errors.
 #include <ModbusTCP.h>        // ~/Documents/Arduino/libraries/ModbusTCP-master
+
+
 #include <HttpClient.h>       // ~/Documents/Arduino/libraries/HttpClient
+
+#define WEBDUINO_FAVICON_DATA ""     // no favicon
+#define WEBDUINO_SERIAL_DEBUGGING 2  // WebServer library debugging: 0=off, 1=requests, 2=verbose
 #include <WebServer.h>        // ~/Documents/Arduino/libraries/Webduino-master
+
 #include <SSLClient.h>        // ~/Documents/Arduino/libraries/SSLclient
 
 // To implement SSLClient EthernetHTTPS example:
@@ -159,7 +165,7 @@ SdFat SD;            // replace SD functions with SdFat functions
 #define I2C_ADDRESS 0x50                                     // used in utils.ino
 
 #define PARMFILENAME "parms1.txt"                            // SD parm file name
-#define BOOTLOADER_PATH "/bin/firmware/updatefw.bin"         // path including file name AFTER firmware server root (192.168.1.4:49152/Users/wwe/Sites)
+#define BOOTLOADER_PATH "/WWE/bin/firmware/updatefw.bin"     // path including file name, leading slash required
 #define SD_FILENAME "updatefw.bin"                           // bootloader binary file name only
 #define SAMPLE_RATE_PER_SEC 10000                            // max ADC rate is 10000 Hz
 #define SAMPLE_PERIOD_MICROS 1000000 / SAMPLE_RATE_PER_SEC   // 10^6 usec/sec * (1/10000) sec/sample = 100 usec/sample
@@ -231,7 +237,6 @@ char jsonbuf[4096];  // used here and in parms.ino, web.ino, webclient.ino
 byte rcvbuf[4096];   // used in webclient.ino
 
 char mac_chars[] = "00:00:00:00:00:00\0";  // MAC address string, used in parms.ino, web.ino, webclient.ino
-int ethernet_ok = 0;                       // Ethernet status flag, used in wwe.ino
 boolean SD_ok = false;                     // SD card flag - see wwe.ino, parms.ino, webclient.ino
 
 const unsigned int udp_remote_port          = 58328;  // Controller data port
@@ -343,7 +348,7 @@ void setup() {
   // Initialize Ethernet and timekeeping - see web.ino
   //   Problems initializing Ethernet + SD went away after replacing the original Ethernet shield with the Ethernet 2 shield.
   // SETUP NOTE: It may be possible to continue WITHOUT Ethernet, but further testing is required before we allow that.
-  while ( !(ethernet_ok = initWeb()) ) {
+  while ( !initWeb() ) {
     Serial << "wwe: ETHERNET DOWN!\n";
     delay(15000);
     Serial << "wwe: Retrying Ethernet...\n";
@@ -499,10 +504,6 @@ void loop() {
     if (shutdown_state == 1) Serial << "wwe: SHUTDOWN STATE = 1\n";
     if (shutdown_state == 2) Serial << "wwe: SHUTDOWN STATE = 2\n";
 
-    // ***CHECK ETHERNET***
-    // Do HARDWARE and SOFTWARE tests to establish Ethernet status - see webclient.ino
-    EthernetOK() ? ethernet_ok = true : ethernet_ok = false;  
-
     // ***CHECK TIME***
     // Update myunixtime every hour, on-the-hour from the RTC
     // ***myunixtime is incremented EVERY SECOND by readADCs() - see adc.ino***
@@ -525,7 +526,8 @@ void loop() {
     // A simple webserver generates the Controller Operating Parameters web page at <controllerIP>/parms.html 
     //   among other requests, all of which .processConnection() handles - see webserver.ino.
     // This WAS outside of if(do_post) and required a few *msec* each loop() iteration, which adds up, so we put it here.
-    if ( ethernet_ok ) {
+    if ( ethernetOK() ) {
+      Serial << "wwe: CHECKING WEBSERVER...\n";
       webserver.processConnection();
     }
 
@@ -559,7 +561,7 @@ void loop() {
     //   To avoid Ethernet adapter use conflicts with other processes, we do the API call(s) at
     //     some arbitrary # seconds after the hour mark, also not falling on-the-minute (like config requests).
     if ( (myunixtime % 600) == 6 ) {
-      if ( ethernet_ok ) {
+      if ( ethernetOK() ) {
         auto starttime = millis();
         Serial << "wwe: getWeatherData() called.\n";
         getWeatherData();  // in weather.ino --> calls weather API(s) in webclient.ino
@@ -649,12 +651,14 @@ void loop() {
 
 
     // READ Nuvation data --> ***REQUIRES Ethernet***
-    if ( ethernet_ok ) {
+    if ( ethernetOK() ) {
       auto tcp_starttime = millis();
       for (int i = 0; i < NUM_MOD_NUV_CHANNELS; i++) {
         mod_nuv_regs[i]->readReg(false);  // false --> read directly from the device (Nuvation is quite fast)
         //Serial << getModchannelName(3, i) << ": " << getModchannelValue(3, i) << "\n";
       }
+      // If this times out, the total read time will be ~24 sec = 8 * 3000 ms.
+      // 3000 ms is hard-coded in ModbusTCP.cpp. Change this?
       Serial << "wwe: Nuvation Modbus/TCP read time = " << (millis() - tcp_starttime) << " msec\n";
     }
 
@@ -702,9 +706,9 @@ void loop() {
     // ***POST DATA*** --> ***requires Ethernet***
     Serial << "wwe: POSTING DATA...\n";
     
-    if ( ethernet_ok ) {
+    if ( ethernetOK() ) {
         
-      sendUDPWorkaround();  // this may be necessary even with Ethernet 2 shield - see web.ino
+      //sendUDPWorkaround();  // Is this necessary with Ethernet Shield 2? - see web.ino
 
       // Send UDP data to the Data Server.
       //   Program flow: sendDataUDP() --> printPOSTBody() --> printOrCount(). See web.ino and webclient.ino
@@ -766,7 +770,7 @@ void loop() {
           }
         }  // END do firmware update
       }  // END send config request
-    } // END if (ethernet_ok) { <post data> }
+    } // END if ( ethernetOK() ) { <post data> }
     
     Serial << "wwe: LOOP time = " << (millis() - do_loop_time) << " msec for " << loop_counter << " loop() iterations\n";
     do_loop_time = millis();
@@ -775,21 +779,13 @@ void loop() {
     Serial << "wwe: ++++++++++ POST #" << post_counter << " complete ++++++++++\n";
 
     // We put a short delay here to allow the Ethernet adapter to 'settle' after the UDP sends.
-    // Because... the first task in the next if(do_post){} will be to check Ethernet with EthernetOK()
+    // Because... the first task in the next if(do_post){} will be to check Ethernet with ethernetOK()
     delay(10);
     
     // Setting do_post = false MUST BE DONE HERE because readADCs sets do_post = true BY TIMER *regardless* of where we 
     //   happen to be in the loop(){ ... if(do_post){...} } cycle! For example, if we set do_post = false at the start of 
     //   if(do_post), readADCs may set do_post = true DURING if(do_post), triggering another if(do_post) cycle IMMEDIATELY 
-    //   after the current if(do_post){...} completes! This will continue for a few if(do_post) cycles UNTIL if(do_post) 
-    //   synchronizes its start with the timer. Why does this matter? Because...
-    // Prior to synchronization...
-    //   EthernetOK() requires about 7 msec to do a client.connect(), but only about 2 msec after synchronization. And...
-    //     client.connect() calls where 7 msec were required resulted in a subsequent FAILED API GET and ***STOPPED CODE*** 
-    //     during the https.connect() to the API. The only way out is a watchdog reset!
-    //   So, there appears to be some sort of Ethernet client initialization/timing issue here that needs to be avoided 
-    //     at all costs! Putting do_post = false HERE *and* putting the API GET into if(do_post){...} seems to be a fix. 
-    //     Now, the ONLY time we see a 7 msec client.connect() is during the very first loop() cycle at startup.
+    //   after the current if(do_post){...} completes! 
     do_post = false;
   }  // END if (doPost)
 

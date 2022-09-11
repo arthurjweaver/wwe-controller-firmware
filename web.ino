@@ -56,9 +56,8 @@ int initWeb() {
     Serial << "web: initWeb Ethernet initialization successful.\n";
 
     Serial << "web: initWeb Getting NTP time...\n";
-    sendUDPWorkaround();                          // this may be necessary even with Ethernet 2 shield - see function below
+    //sendUDPWorkaround();                          // this may be necessary even with Ethernet 2 shield - see function below
     unsigned long ntptime = ntpUnixTime(ntpudp);  // get NTP time (unix time format), returns 0 if it fails
-    ntpudp.stop();                                // stop Ethernet UDP client
 
     // Set the PROGRAM time (myunixtime)
     Serial << "web: initWeb Getting RTC time...\n";
@@ -105,15 +104,20 @@ int initWeb() {
 
 
 // This function is a hack to kickstart Ethernet UDP before we use it for other UDP stuff.
-//   It broadcasts (255.255.255.255) a dummy UDP packet.
-//   Tests suggest it is still needed with the Ethernet 2 shield.
-void sendUDPWorkaround(){
-  statusudp.begin(456);                            // start a UDP client on an arbitrary port
-  static uint8_t udp_ip[] = {255, 255, 255, 255};  // set broadcast IP
-  statusudp.beginPacket(udp_ip, 58321);            // open the packet, send to server, port
-  statusudp.write("123");                          // write some random chars
-  statusudp.endPacket();                           // close the packet
-  statusudp.stop();                                // stop UDP client
+//   It broadcasts a dummy UDP packet to the local network (255.255.255.255)
+//   Tests suggest it is still needed with the Ethernet Shield 2.
+// Regarding broadcast address - see https://en.wikipedia.org/wiki/Broadcast_address#IP_networking
+//   "A special definition exists for the IP address 255.255.255.255. It is the broadcast address of 
+//   the zero network or 0.0.0.0, which in Internet Protocol standards stands for this network, i.e. 
+//   the local network. Transmission to this address is limited by definition, in that it is never 
+//   forwarded by the routers connecting the local network to other networks."
+void sendUDPWorkaround() {
+  statusudp.begin(555);                         // start a UDP client, listening on an arbitrary port
+  static uint8_t udp_ip[] = {255,255,255,255};  // broadcast to the local network
+  statusudp.beginPacket(udp_ip, 55555);         // open packet for sending to (server or broadcast, port)
+  statusudp.write("wwe");                       // write some random chars
+  statusudp.endPacket();                        // close the packet
+  statusudp.stop();                             // stop UDP client
 }
 
 
@@ -122,7 +126,7 @@ void sendUDPWorkaround(){
 // Send a UDP packet with current parms to the UDP server.
 int sendConfigUDP(char* ip_str) {
   int rc = 0;                          // return code
-  statusudp.begin(456);                // open UDP port 456
+  statusudp.begin(456);                // start a UDP client, listening on an arbitrary port
   unsigned long starttime = millis();  // measure how long this takes
 
   Serial << "web: sendConfigUDP() Sending current parms to UDP server: " << ip_str << ":" << udp_remote_port_config << "\n";
@@ -188,7 +192,7 @@ void sendDataUDP (uint8_t* udp_ip, int udp_remote_port, int do_modbus) {
   unsigned long starttime = millis();
   
   //Serial << "web: calling statusudp.begin()...\n";
-  statusudp.begin(456);
+  statusudp.begin(456);  // start a UDP client, listening on an arbitrary port
 
   //Serial << "web: calling statusudp.beginPacket()...\n";
   statusudp.beginPacket(udp_ip, udp_remote_port);
@@ -204,8 +208,8 @@ void sendDataUDP (uint8_t* udp_ip, int udp_remote_port, int do_modbus) {
   
   unsigned long udp_duration = millis() - starttime;
 
-  Serial << "web: sendDataUDP to " << udp_ip[0] << "." << udp_ip[1] << "." << udp_ip[2] << "." << udp_ip[3] << ":" 
-                                   << udp_remote_port << " send time = " << udp_duration << " msec\n";
+  Serial << "web: sendDataUDP --> " << udp_ip[0] << "." << udp_ip[1] << "." << udp_ip[2] << "." << udp_ip[3] << ":" 
+                                   << udp_remote_port << ", send time = " << udp_duration << " msec\n";
 }
 
 

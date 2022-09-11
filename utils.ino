@@ -11,7 +11,7 @@
 
 // This function is called from setup() in web.ino.
 //   ntptime = ntpUnixTime(ntpudp);
-//   where ntpudp is an object in class EthernetUDP. In Ethernet.h, a derived class (UDP) inherits the EthernetUDP class.
+//   ntpudp is an instantiation of class EthernetUDP. In Ethernet.h, a derived class (UDP) inherits the EthernetUDP class.
 //   So below, ntpUnixTime is being passed a parameter which is the address of an object of class UDP.
 unsigned long inline ntpUnixTime(UDP &udp) {
 
@@ -53,6 +53,7 @@ unsigned long inline ntpUnixTime(UDP &udp) {
   NTPtime += ( udp.read() > 111 );  // if byte > arg, add 1 sec; otherwise add 0 sec
 
   udp.flush();                    // discard the rest of the packet
+  udp.stop();                     // disconnect the client
   // convert NTP time (seconds since 1900-01-01) to unix time (seconds since 1970-01-01)
   return NTPtime - 2208988800ul;  // subtract 70 years = 2208988800 sec
 }  // END ntpUnixTime

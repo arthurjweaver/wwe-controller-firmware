@@ -25,7 +25,7 @@
 //   Sketch --> Export compiled Binary
 //
 // Open a Cygwin64 Terminal window and copy compiled binary (and source) from the PC to Mac server:
-//   cd /cygdrive/c/Users/SANDY/Documents/Arduino/updatefw && scp * wwe@192.168.1.4:/Users/wwe/Sites/bin/firmware
+//   cd /cygdrive/c/Users/SANDY/Documents/Arduino/updatefw && scp * wwe@192.168.1.4:/Users/wwe/Sites/WWE/bin/firmware
 
 #include <DueFlashStorage.h>
 #include <HttpClient.h>
@@ -41,12 +41,12 @@
 SdFat SD;
 #define SD_CS_PIN 4
 
-#define SERVERADDR "192.168.1.4"        // IP address (string) of Update Server (string)
-#define SERVERPORT 49152                // Update Server port (integer)
-#define CONFIG_PATH "/bin/config/"      // path to controller config files on Update Server (string)
-#define FIRMWARE_PATH "/bin/firmware/"  // path to firmware binary files on Update Server (string)
-#define BUFSIZE 4096                    // buffer size (bytes) for rcvbuf[]
-#define FLASH_START_INTS ((int *)0)     // used only in commented-out code, purpose unclear
+#define SERVERADDR "192.168.1.4"            // IP address (string) of Update Server (string)
+#define SERVERPORT 49152                    // Update Server port (integer)
+#define CONFIG_PATH "/WWE/bin/config/"      // path to controller config files on Update Server, leading and trailing slash required
+#define FIRMWARE_PATH "/WWE/bin/firmware/"  // path to firmware binary files on Update Server, leading and trailing slash required
+#define BUFSIZE 4096                        // buffer size (bytes) for rcvbuf[]
+#define FLASH_START_INTS ((int *)0)         // used only in commented-out code, purpose unclear
 
 // global vars
 uint8_t mac[] = {0,0,0,0,0,0};             // Ethernet adapter MAC address: used in initWeb()

@@ -913,7 +913,7 @@ void readADCs() {
   //       a class of its own. Instead, it is managed within the L1L2 diff channel (see class AnalogDiffChannel) by calling l1l2_diff.CalcDiff(true). 
   //       And, since ac_freq1 has been *superseded* by ac_freq, we now call l1l2_diff.CalcDiff(false), just like the other diff channels - see below.
 
-  // Update RPM channels at full ADC rate = 10000 Hz.
+  // Update ONE of these RPM channels at full ADC rate = 10000 Hz.
   ac_freq.sample_and_test();  // see class RPMChannel ***IN USE ***
   //ac_rpm.sample_and_test();   // see class RPM2Channel ***WORKING***
   //ac_pll.doPLL();             // see class PLLChannel ***WORKING***
