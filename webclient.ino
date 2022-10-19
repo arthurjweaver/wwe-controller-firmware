@@ -728,37 +728,38 @@ boolean ethernetOK() {
   char cfg_addr[20];                // Update Server IP address string, e.g., "192.168.1.4"
   uint16_t cfg_port;                // Update Server port, e.g., 80 or 49152
   static boolean ethernet_status = false;  // status flag, static!
+  static int fail_count = 0;
 
   // If Ethernet has failed, force socket disconnection - see socket.cpp
   //   This is a WORKAROUND.
-  //   Rarely, the webserver attempts to establish a connection with itself!, hanging the code:
+  //   Rarely, the webserver (port 80) gets tied up by mysterious requests coming from 
+  //   WITHIN the LAN, hanging the code, e.g.:
   //     Socket 0 SYNSENT Port 80 ---> 192.168.1.238:61699 
   //     Socket 1 ESTABLISHED Port 80 ---> 192.168.1.238:61849 
-  //   webclient: Ethernet.linkStatus() = 1, client.connect FAILED!
-  //   Still trying to track down the problem - in WebServer.h?
-  if ( !ethernet_status ) {
-    //W5100.execCmdSn(0, Sock_CLOSE);
-    //W5100.execCmdSn(1, Sock_CLOSE);
-  }
 
-  showSocketStatus();  // see function below
+  //showSocketStatus();  // see function below, for DEBUG
   
   strcpy(cfg_addr, parm_cfg_ip.parmVal());  // get Update Server IP address from its parm (192.168.1.4)
   cfg_port = parm_cfg_port.intVal();        // get Update Server port from its parm (49152)
 
   auto connecttime = micros();
   if ( client.connect(cfg_addr, cfg_port) ) {
-    Serial.print("webclient: Ethernet.linkStatus() = ");
-    Serial.print(Ethernet.linkStatus());
-    Serial.print(", client.connect time = ");
-    Serial.print( ((float)(micros() - connecttime)/1000.), 3 );
-    Serial.println(" msec");
+    //Serial.print("webclient: client.connect time = ");
+    //Serial.print( ((float)(micros() - connecttime)/1000.), 3 );
+    //Serial.println(" msec");
     ethernet_status = true;
   } else {
-    Serial << "webclient: Ethernet.linkStatus() = " << Ethernet.linkStatus() << ", client.connect FAILED!\n";
     ethernet_status = false;
-    while(1);  // ***DEAD END*** for DEBUG
+    fail_count++;                    // count failures
+    Serial << "webclient: Ethernet.linkStatus() = " << Ethernet.linkStatus() << ", client.connect FAILED!\n";
+    Serial << "webclient: CLOSING ETHERNET SOCKETS...\n";
+    W5100.execCmdSn(0, Sock_CLOSE);  // force close sockets, see comments above
+    W5100.execCmdSn(1, Sock_CLOSE);
+    Serial << "webclient: RESTARTING WEBSERVER...\n";
+    webserver.reset();               // stop webserver
+    webserver.begin();               // restart webserver
   }
+  Serial << "webclient: ETHERNET FAILURE COUNT = " << fail_count << "\n";
   client.flush();  // clear out any data
   client.stop();   // stop client after (trying to) connect
   return( ethernet_status );
@@ -808,17 +809,26 @@ void showSocketStatus() {
     }
     Serial.print(":");
     Serial.print(W5100.readSnDPORT(i));  // destination port
-    
-    if (W5100.readSnDPORT(i) == 123) Serial.println(" (NTP server)");
-    else if (W5100.readSnDPORT(i) == 58328) Serial.println(" (controller UDP --> data server)");
-    else if (W5100.readSnDPORT(i) == 58329) Serial.println(" (Modbus fast UDP --> data server)");
-    else if (W5100.readSnDPORT(i) == 58330) Serial.println(" (Modbus slow UDP --> data server)");
-    else if (W5100.readSnDPORT(i) == 58331) Serial.println(" (config UDP --> data server)");
-    else if (W5100.readSnDPORT(i) == 58332) Serial.println(" (Nuvation UDP --> data server)");
-    else if (W5100.readSnDPORT(i) == 49152) Serial.println(" (HTTP request --> data server)");
-    else if (W5100.readSnDPORT(i) == 443) Serial.println(" (HTTPS request --> API server)");
-    else if (W5100.readSnDPORT(i) == 502) Serial.println(" (Modbus/TCP request)");
-    else if (W5100.readSnDPORT(i) == 53) Serial.println(" (DNS server)");
-    else Serial.println();
+
+    int sp = W5100.readSnPORT(i);
+    int dp = W5100.readSnDPORT(i);
+    if ( sp == 80 ) {
+      Serial.println(" (webserver --> )");
+    }
+    else {
+      switch ( dp ) {
+        case 53:    Serial.println(" ( --> DNS server)"); break;
+        case 123:   Serial.println(" ( --> NTP server)"); break;
+        case 443:   Serial.println(" ( --> HTTPS API server)"); break;
+        case 502:   Serial.println(" ( --> Nuvation Modbus/TCP)"); break;
+        case 49152: Serial.println(" (HTTP request --> update server)"); break;
+        case 58328: Serial.println(" (controller UDP data --> data server)"); break;
+        case 58329: Serial.println(" (Modbus fast UDP data --> data server)"); break;
+        case 58330: Serial.println(" (Modbus slow UDP data --> data server)"); break;
+        case 58331: Serial.println(" (config UDP data --> data server)"); break;
+        case 58332: Serial.println(" (Nuvation UDP data --> data server)"); break;
+        default:    Serial.println();
+      }
+    }
   }
 }

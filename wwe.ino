@@ -81,10 +81,10 @@
 //   DO NOT Update the Time library using Sketch --> Manage Libraries!
 //     Doing creates a "Time" folder (instead of "Time-master") which then generates compile errors involving DS3231RTC.
 //
-//   ***ModbusMaster.h and ModbusMasterTCP HAVE BEEN MODIFIED (same constant in both)***
+//   ***ModbusMaster.h and ModbusTCP.h HAVE BEEN MODIFIED (same constant in both)***
 //    static const uint16_t ku16MBResponseTimeout          = 2000; ///< Modbus timeout [milliseconds]
 //    -->
-//    static const uint16_t ku16MBResponseTimeout          = 100; ///< Modbus timeout [milliseconds]
+//    static const uint16_t ku16MBResponseTimeout          = 200; ///< Modbus timeout [milliseconds]
 //
 //   ***Ethernet.h and Ethernet.cpp HAVE BEEN MODIFIED***
 //     See note below regarding SSLClient library.
@@ -422,7 +422,7 @@ void setup() {
 
 
   // check weather data as we startup, then at intervals in loop()
-  getWeatherData();  // in weather.ino --> calls getNWSAPIData and getOpenMeteoData in webclient.ino
+  getWeatherData();  // in weather.ino --> calls weather API(s) in webclient.ino
   Serial << "wwe: weather_furl = " << weather_furl << "\n";
 
   
@@ -505,11 +505,11 @@ void loop() {
     if (shutdown_state == 2) Serial << "wwe: SHUTDOWN STATE = 2\n";
 
     // ***CHECK TIME***
-    // Update myunixtime every hour, on-the-hour from the RTC
-    // ***myunixtime is incremented EVERY SECOND by readADCs() - see adc.ino***
-    if ( rtc_time = realtime_clock.get() ) {
-      if ( rtc_time % 3600 == 0 ) myunixtime = rtc_time;
-    }
+    // Update myunixtime every SECOND from the RTC (if available)
+    // Although myunixtime is incremented EVERY SECOND by readADCs() - see adc.ino, it may not 'keep up' with real time
+    // due to possible delays in if(do_post){..}, e.g., weather API calls, webserver requests, Modbus timeouts, config requests.
+    if ( rtc_time = realtime_clock.get() ) myunixtime = rtc_time;
+
     // Display UTC and LOCAL time for this post
     // ***myunixtime is incremented EVERY SECOND by readADCs() - see adc.ino***
     time_t t = myunixtime;
@@ -517,6 +517,7 @@ void loop() {
     sprintf(theyear, "%d", year(t)); sprintf(themonth, "%02d", month(t)); sprintf(theday, "%02d", day(t));
     sprintf(thehour, "%02d", hour(t)); sprintf(theminute, "%02d", minute(t)); sprintf(thesecond, "%02d", second(t));
     Serial << "wwe: RTC time   = " << theyear << "-" << themonth << "-" << theday << " " << thehour << ":" << theminute << ":" << thesecond << "\n"; 
+    
     t += parm_TZ_offset.intVal()*3600;  // add timezone offset
     sprintf(theyear, "%d", year(t)); sprintf(themonth, "%02d", month(t)); sprintf(theday, "%02d", day(t));
     sprintf(thehour, "%02d", hour(t)); sprintf(theminute, "%02d", minute(t)); sprintf(thesecond, "%02d", second(t));
@@ -560,7 +561,7 @@ void loop() {
     // ***GET WEATHER DATA*** --> ***REQUIRES Ethernet***
     //   To avoid Ethernet adapter use conflicts with other processes, we do the API call(s) at
     //     some arbitrary # seconds after the hour mark, also not falling on-the-minute (like config requests).
-    if ( (myunixtime % 600) == 6 ) {
+    if ( (myunixtime % 3600) == 6 ) {
       if ( ethernetOK() ) {
         auto starttime = millis();
         Serial << "wwe: getWeatherData() called.\n";
@@ -569,8 +570,7 @@ void loop() {
         Serial << "wwe: getWeatherData read time = " << (millis() - starttime) << " msec\n";
       }
     }
-
-    
+ 
     
     // ***READ DATA***
     Serial << "wwe: READING DATA...\n";
@@ -771,7 +771,9 @@ void loop() {
         }  // END do firmware update
       }  // END send config request
     } // END if ( ethernetOK() ) { <post data> }
-    
+
+    // loop() will typically execute several 1000 iterations while if(do_post){...} is false.
+    // We reset loop timer and counter here, so loop time = post time + loop()'s
     Serial << "wwe: LOOP time = " << (millis() - do_loop_time) << " msec for " << loop_counter << " loop() iterations\n";
     do_loop_time = millis();
     loop_counter = 0;

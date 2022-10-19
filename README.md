@@ -1,6 +1,6 @@
 ## Background
 This repository contains firmware for the [Weaver Wind Energy](https://www.arthurjweaver.net/weaver-wind-energy/) wind turbine controller
-built around the [Arduino Due](https://store-usa.arduino.cc/products/arduino-due?selectedStore=us) microcontroller (Amtel SAM3X8E ARM Cortex-M3 CPU). The firmware evolved along with the small wind turbines designed and built by WWE between 2013 and 2021. Although WWE is no longer in business, the code continues to be maintained for existing turbines and for potential use of the controller in other applications. 
+built around the [Arduino Due](https://store-usa.arduino.cc/products/arduino-due?selectedStore=us) microcontroller (Amtel SAM3X8E ARM Cortex-M3 CPU). The firmware evolved along with the small wind turbines designed and built by WWE between 2013 and 2021. Although WWE is no longer in business, the code continues to be maintained for existing turbines and particulary for *potential use of the controller in other applications.* 
 
 Possible alternative uses include _any data logging or control application_ requiring:
 - Real-time, high-resolution (up to 10000 Hz) voltage and current sensing from a 3-phase alternator
@@ -21,11 +21,11 @@ Version 1.8.19 of the [Arduino IDE](https://www.arduino.cc/en/software) was used
 $ ln -s wwe.ino.arduino_due_x.bin wwe.bin 
 $ ln -s updatefw.ino.arduino_due_x.bin updatefw.bin
 ```
-On a development machine with the Arduino IDE, permissions for all files in the working directory should be 755.
+On a development machine with the Arduino IDE, permissions for all files in the working directory should be set to 755.
 
-`wwe.ino` is the _main_ module for all firmware code _except_ `updatefw.ino`. The beginning of `wwe.ino` contains extensive implementation notes. All code modules are extensively commented.
+`wwe.ino` is the _main_ module for all firmware code _except_ `updatefw.ino`. The beginning of `wwe.ino` contains extensive implementation notes. All code modules are also extensively commented.
 
-`updatefw.ino` is a bootloader program used to automate firmware updates over the web. This file also contains implementation notes.
+`updatefw.ino` is a separate bootloader program used to automate firmware updates over the web. This file also contains implementation notes.
 
 ### Arduino libraries
 Libraries used by this code are _not_ provided in this repository and must be downloaded either from the Arduino IDE or manually. Many are hosted on GitHub. Usage notes for all included libraries can be found in the `wwe.ino` preamble comments. A few libraries used by `wwe.ino` and `updatefw.ino` require minor modifications which are also documented in `wwe.ino`. Finally, there may be a few libraries which are no longer supported or that have been superseded by other libraries of the same name with incompatible code. Those libraries will be included in this repository as they're identified.
@@ -35,17 +35,17 @@ Libraries used by this code are _not_ provided in this repository and must be do
 #### Ethernet
 The firmware uses Ethernet to:
 - send Network Time Protocal (NTP) UDP requests (port 123) - once, in `setup()`
-- send Modbus/TCP requests to a Nuvation BMS (port 502) - once per second
-- send system data via UDP to a data server (ports 58328, 58329, 58330, 58332) - once per second
-- send system configuration via UDP to an update server (port 58331) - once every few minutes
+- send Modbus/TCP requests to a Nuvation battery management system (port 502) - once per second
+- send system data via UDP to a Data Server (ports 58328, 58329, 58330, 58332) - once per second
+- send system configuration via UDP to an Update Server (port 58331) - once every few minutes
+- send HTTP requests for firmware updates to an Update Server (port 49152) - as needed
 - send HTTPS requests to the [National Weather Service API](https://www.weather.gov/documentation/services-web-api) (port 443) - once per hour
-- send HTTP requests to a firmware update server (port 49152) - as needed
 
-Rarely, during Ethernet access, the code has been observed to hang, and recovers only when the watchdog timer times out. Efforts to track down this known problem are currently focused on dealing with "stuck sockets":
+Rarely, during Ethernet access, the `loop()` code has been observed to hang and recovers only when the watchdog timer times out. Efforts (by others) to fix this known problem have focused on dealing with "stuck sockets". In our case, stuck sockets appear to be caused by unexpected connections made from _within_ the LAN to the webserver (see `webserver.ino`). For further discussion, see:
 - https://forum.arduino.cc/t/dealing-with-lost-arduino-ethernet-connectivity-stuck-sockets/244055/12
 - https://github.com/arduino-libraries/Ethernet/issues/82
 
-Fortunately, there appear to be viable workarounds which will be implemented in the next update and noted here.
+In the current version, a workaround which simply closes stuck sockets as soon as they are detected has been implemented and tested.
 
 ## Program description
 The code is built around a low-level timer interrupt which calls a function called `readADCs()` (see `adc.ino`) at a rate of 10000 Hz. `readADCs()` is itself time-sliced to perform various tasks at a rate of 1000 Hz. The rationale for this scheme is to accomplish the following:
@@ -58,7 +58,7 @@ The code is built around a low-level timer interrupt which calls a function call
 2. Within `loop()`, at (still precise) rates much _slower_ than once-per-second, the firmware:
    - sends and compares system configuration data saved on a (remote or local) "Update Server"
    - checks for firmware updates on the Update Server
-   - monitors a National Weather Service API for alerts, warnings, or advisories (high winds)
+   - monitors a National Weather Service API for alerts, warnings, or advisories (e.g., high winds)
 
 3. Outside of `loop()`, at rates up to 10000 Hz, `readADCs()` calls "critical" functions which:
    - sample various raw voltages and currents from a 3-phase alternator (wind turbine)
@@ -68,9 +68,9 @@ The code is built around a low-level timer interrupt which calls a function call
    - compute "instantaneous" alternator rotational frequency (rpm)
    - compute alternator energy production (Energy = Power x time)
 
-Within `loop()`, various timeouts are used to limit how much time data reads, writes and posts are allowed to take before moving on to the next `loop()` iteration. The idea is to complete execution of all `loop()` tasks (successful or not) in less than one second. The aim is to prevent data being "lost" due to blocking.
+Within `loop()`, various timeouts are used to limit how much time data reads, writes and posts are allowed to take before moving on to the next `loop()` iteration. The idea is to complete execution of all `loop()` tasks (successful or not) in less than one second and thereby minimize "lost" data.
 
 Outside of `loop()`, the interrupt-driven, high-rate "critical" processes _always_ function at their intended rates whether or not `loop()` is slowed (or blocked) for any reason. This can be an important safety feature for managing a machine such as a wind turbine!
 
-Interestingly, the standard watchdog function will reboot the controller should `loop()` freeze up for any reason _regardless_ of the state of interrupt-driven tasks. However, a frozen interrupt-driven task **will not be detected** by the watchdog unless such a failure prevents `loop()` itself from executing. An open question is how such events might be detected and dealt with.
+Interestingly, the standard watchdog function will reboot the controller should `loop()` freeze up for any reason _regardless_ of the state of interrupt-driven tasks. However, a frozen *interrupt-driven* task **will not be detected** by the watchdog unless such a failure prevents `loop()` itself from executing. While this has **not** been an issue, an open question is how such events might be detected and dealt with.
 
