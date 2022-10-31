@@ -1155,6 +1155,8 @@ void furlctl1() {
 // Check for Morningstar mppt600 and div60 controller faults. 
 // Return sum of fault codes.
 int checkMorningstarFaults() {
+  if ( motor.isMotorOn() ) return 0;
+
   int f = mppt600_fault_i.valInt() + div60_fault.valInt();
   return f ;
 }
@@ -1163,6 +1165,8 @@ int checkMorningstarFaults() {
 // Check for Morningstar mppt600 and div60 controller alarms (these are warnings, not faults). 
 // Return sum of alarm codes.
 int checkMorningstarAlarms() {
+  if ( motor.isMotorOn() ) return 0;
+  
   int a =  mppt600_alarm_i.valInt() + div60_Alarm_LO.valInt();
   return a;
 }
@@ -1173,6 +1177,10 @@ int checkMorningstarAlarms() {
 //   mppt600_mb_charge_state MUST be in MPPT(5) or DISC(2), AND...
 //   div60_control_state MUST be in BULK(5) or PWM(6).
 int checkMorningstarState() {
+  // This is a workaround to avoid Morningstar furls due to bad Modbus long reads due to stepper motor driver noise.
+  // Better shielding within the controller may allow this check to be eliminated.
+  if ( motor.isMotorOn() ) return 0;
+  
   int mppt600_state = mppt600_mb_charge_state.valInt();  // get mppt600 state
   int div60_state = div60_control_state.valInt();        // get div60 state
   
