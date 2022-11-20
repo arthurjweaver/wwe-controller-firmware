@@ -43,7 +43,7 @@ SSLClient https(base_client, TAs, (size_t)TAs_NUM, A6, 1, SSLClient::SSL_ERROR);
 //   and put the generated certificate into the #include'd file "trust_anchors.h"
 void getNWSAPIData(char* theserver, char* thepath) {
   int bytecount = 0;
-  static boolean wxalert = false;  // weather alert flag, static preserves its last state
+  boolean wxalert = false;  // weather alert flag, NOT static!
 
   Serial << "webclient: getNWSAPIData server = " << theserver << "\n";
   Serial << "webclient: getNWSAPIData path = " << thepath << "\n";
