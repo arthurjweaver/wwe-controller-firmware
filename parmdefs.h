@@ -1,11 +1,13 @@
 // ---------- parmdefs.h ----------
-// NOTE: MAX_PARMS 40 - see parms.h
-// current count is 36
+// This module defines ALL Controller Operating Parameters
+// MAX_PARMS 40 (see parms.h) current count = 37
+// Any parms which should NOT be checked against those on the Config Server should be added to the udp-config.py script
+//   on the Config server (e.g., /Users/WWE/Sites/WWE/bin/udp/udp-config.py)
 //
 // This is the most frequently changed parm.
 Parm parm_shutdown_state = Parm("shutdown_state", "Shutdown State", "0/1/2", 0);  // stores the shutdown state across resets
 
-// Allow or disallow controller to override parms which differ from those on the Config Server
+// Allow or disallow the (local) controller to override parm vals if they differ from those on the (remote) Config Server
 Parm parm_ovrd = Parm("ovrd", "Override Updates?", "0/1", 0);  // default = 0 = don't override
 
 // Data Server IP address. This server handles UDP data and config requests from the controller.
@@ -79,8 +81,7 @@ char pbuf24[20] = "192.168.1.1";
 Parm parm_gateway_ip = Parm("gateway_ip", "Gateway IP", pbuf24);           // LAN Gateway
 Parm parm_dns1_ip = Parm("dns1_ip", "DNS1 IP", pbuf24);                    // LAN DNS
 
-// Morningstar IP parms - CURRENTLY UNUSED
-//   Modbus/TCP turns out to be SLOWER than Modbus/RTU
+// Morningstar IP parms - UNUSED because Modbus/TCP turns out to be SLOWER than Modbus/RTU
 //char pbuf25[20] = "192.168.1.ddd";
 //Parm parm_mppt600_1_ip = Parm("mppt600_1_ip", "MPPT600_1 IP", pbuf25);
 //char pbuf26[20] = "192.168.1.ddd";
@@ -89,6 +90,9 @@ Parm parm_dns1_ip = Parm("dns1_ip", "DNS1 IP", pbuf24);                    // LA
 // Site latitude and longitude parms, used for weather API queries
 Parm parm_site_latitude = Parm("site_latitude", "Site Latitude", "42.2534");
 Parm parm_site_longitude = Parm("site_longitude", "Site Longitude", "-76.5702");
+
+// WX furl trigger override parm (see furlctl.ino)
+Parm parm_wx_override = Parm("wx_override", "WX Override?", "0/1", 0);  // default = 0 = don't override
 
 // Controller restart count parm
 Parm parm_num_resets = Parm("num_resets", "Restart Count", "", 0);  // default = none

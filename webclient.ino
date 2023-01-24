@@ -43,7 +43,8 @@ SSLClient https(base_client, TAs, (size_t)TAs_NUM, A6, 1, SSLClient::SSL_ERROR);
 //   and put the generated certificate into the #include'd file "trust_anchors.h"
 void getNWSAPIData(char* theserver, char* thepath) {
   int bytecount = 0;
-  boolean wxalert = false;  // weather alert flag, NOT static!
+  boolean wxalert0 = false;  // weather alert flags, NOT static!
+  boolean wxalert1 = false;
 
   Serial << "webclient: getNWSAPIData server = " << theserver << "\n";
   Serial << "webclient: getNWSAPIData path = " << thepath << "\n";
@@ -97,17 +98,29 @@ void getNWSAPIData(char* theserver, char* thepath) {
   // Look for any occurances of "wind" or "Wind" or "WIND" in the Alert/Warning/Advisory
   while ( true ) {
     if ( https.available() ) {
-      char cbuf[] = "abcd";                                             // initialize string, includes \0 at end --> necessary for printing it!
+      char cbuf[] = "abcd";                                             // initialize a 4-char string, includes \0 at end --> necessary for printing it!
       int len = https.read((byte*)&cbuf[0], 1);                         // read one byte, char ptr --> byte ptr
       if ( len == 1 ) bytecount++;                                      // increment byte counter
       cbuf[0] = toupper( cbuf[0] );                                     // convert char to uppercase
+      
+      // Look for 'WIND' in weather alert
       if ( cbuf[0] == 'W' ) {                                           // if we've found a 'w' or 'W'...
         len = https.read((byte*)&cbuf[1], 3);                           //   read next 3 bytes, char ptr --> byte ptr
         bytecount += len;                                               //   increment byte counter by #bytes read
         if ( len == 3 ) {                                               //     if we have 3 more bytes (chars)...
           for (int i = 1; i < 4; i++) cbuf[i] = toupper( cbuf[i] );     //       convert them to uppercase
-          Serial << "webclient: getNWSAPIData buf = " << cbuf << "\n";  //       print cbuf
-          if ( strcmp(cbuf, "WIND") == 0 ) wxalert = true;              //       if we find the string we're looking for, set weather alert flag
+          Serial << "webclient: getNWSAPIData buf = " << cbuf[0] << cbuf[1] << cbuf[2] << cbuf[3] << "\n";  // print 4 cbuf chars
+          if ( strncmp(cbuf,"WIND",4) == 0 ) wxalert0 = true;           //       if we find the string we're looking for, set weather alert flag
+        }
+      }
+      // Look for 'MPH' in weather alert. We add this to avoid furling during 'wind chill' alerts where no wind speed is given.
+      if ( cbuf[0] == 'M' ) {                                           // if we've found a 'm' or 'M'...
+        len = https.read((byte*)&cbuf[1], 2);                           //   read next 2 bytes, char ptr --> byte ptr
+        bytecount += len;                                               //   increment byte counter by #bytes read
+        if ( len == 2 ) {                                               //     if we have 2 more bytes (chars)...
+          for (int i = 1; i < 3; i++) cbuf[i] = toupper( cbuf[i] );     //       convert them to uppercase
+          Serial << "webclient: getNWSAPIData buf = " << cbuf[0] << cbuf[1] << cbuf[2] << "\n";  // print 3 cbuf chars
+          if ( strncmp(cbuf,"MPH",3) == 0 ) wxalert1 = true;            //       if we find the string we're looking for, set weather alert flag
         }
       }
     }
@@ -118,7 +131,7 @@ void getNWSAPIData(char* theserver, char* thepath) {
     }
   }
 
-  wxalert ? weather_furl = true : weather_furl = false;  // set weather FURL flag (global), used in furlctl.ino
+  (wxalert0 && wxalert1) ? weather_furl = true : weather_furl = false;  // set weather FURL flag (global), used in furlctl.ino
   Serial << "webclient: getNWSAPIData data length = " << bytecount << " bytes\n";
   return;           // return the data
   

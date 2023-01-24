@@ -1037,12 +1037,14 @@ void furlctl1() {
         
       // Unfurl STEPWISE, holding each lower TP for duration of TP_timer until we're back to zero.
       // ASSUME: rotor inertia delays RPM response (to changing WS) by 'a few' sec. So, don't unfurl for AT LEAST that long.
-      // UNFURL to predTP if: TP_timer >= #seconds * FURLCTL1_PER_SEC (e.g., 2-10 seconds?)
-      //                      *and* (rotor speed is decreasing *or* is < 180 rpm)
-      //                      *and* (wind speed is decreasing *or* is < 5 m/s)
-      //                      *and* (rotor speed has decreased to a 'reasaonable' RPM
-      //                      *and* pred TP < actual TP
-      if ( (TP_timer >= (8*FURLCTL1_PER_SEC)) && 
+      // UNFURL to predTP if: 
+      //   TP_timer >= #seconds * FURLCTL1_PER_SEC                   --> 3-10 seconds
+      //   *and* (rotor speed is decreasing *or* is < low threshold) --> 180 rpm
+      //   *and* (wind speed is decreasing *or* is < low threshold)  --> 5 m/s
+      //   *and* (rotor speed has decreased to a 'reasonable' RPM    --> 340 rpm
+      //   *and* pred TP < actual TP
+      //
+      if ( (TP_timer >= (6*FURLCTL1_PER_SEC)) && 
            ( (dRPMdt < 0) || (rpm_avg < (180*1024)) ) && 
            ( (dWSdt < 0) || (ws_avg < (5*1024)) ) &&
            ( rpm_avg < (340*1024) ) &&
@@ -1207,7 +1209,7 @@ int checkSCConditions() {
   if ( anemometer_furl ) reason |= 64;                               // if ANEMometer frozen flag, set bit 6
   if ( morningstar_furl ) reason |= 128;                             // if MORNingstar fault or wrong state flag, set bit 7
   if ( threshold_checkers[SC_HIGH_WS].check(false) ) reason |= 256;  // if eXtreme WIND flag, set bit 8
-  if ( weather_furl ) reason |= 512;                                 // if WX (weather) flag, set bit 9
+  if ( weather_furl && !parm_wx_override.intVal() ) reason |= 512;   // if WX (weather) flag and "WX Override?" == 0, set bit 9
   return(reason);                                                    // return 10 bits --> 2^10 --> possible values are 0-1023
 }
 
@@ -1225,7 +1227,7 @@ int checkFurlConditions() {
   if ( slippage_furl ) reason |= 64;                                  // if SLIPpage tail motor flag, set bit 6
   if ( morningstar_furl ) reason |= 128;                              // if MORNingstar fault or wrong state flag, set bit 7
   if ( threshold_checkers[SC_HIGH_WS].check(false) ) reason |= 256;   // if eXtreme WIND threshold exceeded, set bit 8
-  if ( weather_furl ) reason |= 512;                                  // if WX (weather) flag, set bit 9
+  if ( weather_furl && !parm_wx_override.intVal() ) reason |= 512;    // if WX (weather) flag and "WX Override?" == 0, set bit 9
   return(reason);                                                     // return 10 bits --> 2^10 --> possible values are 0-1023
 }
 

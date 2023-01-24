@@ -59,12 +59,12 @@ void getWeatherData() {
   */
 
   // NWS API <-- TESTED, WORKING
-  strcpy(wxserver, "api.weather.gov");  // ***trust_anchors.h must include this HTTPS server***
-  strcpy(wxpath, "/alerts/active?point=");
-  strcat(wxpath, sitelat);
-  strcat(wxpath, "%2C");
-  strcat(wxpath, sitelon);
-  getNWSAPIData(wxserver, wxpath);  // see webclient.ino
+  strcpy(wxserver, "api.weather.gov");      // ***trust_anchors.h must include this HTTPS server***
+  strcpy(wxpath, "/alerts/active?point=");  // request active alerts @point=sitelat,sitelon
+  strcat(wxpath, sitelat);                  // site latitude from parms
+  strcat(wxpath, "%2C");                    // ,
+  strcat(wxpath, sitelon);                  // site longitude from parms
+  getNWSAPIData(wxserver, wxpath);          // see webclient.ino
   // if NO ALERTS, ~232 bytes are returned
 
 
