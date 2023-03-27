@@ -954,19 +954,33 @@ void furlctl1() {
     // ASSUMPTIONS:
     //   1. No furl is necessary at 20 mph (empirical observation), with 22 mph being the next higher WS to consider, AND
     //   2. power is proportional to cube of wind speed (FACT) --> v^3 dependence, AND
-    //   3. power is proportional to rotor swept area (FACT) --> cos(furl_angle) dependence, A_ellipse/A_circle = PI*r*rcos(furl_angle)/PI*r*r = cos(furl_angle), AND
-    //   4. power is proportional to angle of attack (AoA) which, in turn, is proportional to aerodynamic efficiency = L/D --> cos^2(furl_angle) dependence:
-    //      lift L decreases and drag D increases as a function of furl angle, i.e.,
-    //      L/D = L0*cos(furl_angle) / (D0/cos(furl_angle)) = (L0/D0)*cos^2(furl_angle) ***THIS NEEDS FURTHER RESEARCH***
-    //     
-    //   If #4 holds, then *relative* power = (ratio of WS)^3 is proportional to cos^3(furl angle):
-    //     cos^3(furl_angle) = (WS@furl_angle=0 / WS@furl_angle)^3
-    //     cos(furl_angle) = WS@furl_angle=0 / WS@furl_angle
-    //     furl_angle = acos( WS@furl_angle=0 / WS@furl_angle )
+    //   3. power is proportional to rotor swept area (FACT) --> cos(furl_angle) dependence, A_ellipse/A_circle = PI*r*r*cos(fa)/PI*r*r = cos(fa)
+    //      --> we must decrease the swept area normal to the wind direction in proportion to the increase in power above some WS threshold
+    //   4. power is proportional to CL/CD ratio (CHECK THIS) which changes with furl angle! --> see notes below --> proportional to: WS@fa / WS@fa0
     //
-    // Amazingly enough, this works quite well in practice!
+    //   Equating the *relative* power expressions:
+    //     cos(furl_angle) = (WS@fa0 / WS@fa)^3 * (WS@fa / WS@fa0) = (WS@fa0 / WS@fa)^2
+    //     furl_angle = acos( (WS@fa0/WS@fa)^2 ) <-- ***THIS IS THE RELEVANT EQUATION FOR CALCULATING FURL ANGLE***
     //
-    // For no furl at 20 mph:
+    //   FOR ASSUMPTION #4:
+    //   From Method for Estimating the Aerodynamic Coefficients of Wind Turbine Blades at High Angles of Attack
+    //   https://arc.aiaa.org/doi/abs/10.2514/3.62730?journalCode=je
+    //     Assume P ~ CL/CD = TSR, where
+    //     CL/CD = 2*sin^2(alpha)*cos(alpha) / 2*sin^3(alpha) = cos(alpha)/sin(alpha) = cot(alpha) = TSR!
+    //     where alpha = angle of attack (AoA)
+    //   For a furling wind turbine, we can compute alpha from WS, furl angle, and tip speed:
+    //     tan(alpha) = WS*cos(fa) / (TS + WS*sin(fa))
+    //     cot(alpha) = (TS + WS*sin(fa)) / WS*cos(fa)
+    //     Note @fa=0, cot(alpha) = TS/WS = TSR!
+    //   But, at WS > threshold, we *must* force TSR to decrease by a factor = WS@fa/WS@fa0 in order to maintain constant (max) RPM (and power).
+    //   For example, at WS=20mph and TS=120mph, TSR=6 --> Prel ~ 20/20 = 1
+    //                at WS=30mph and TS=120mph, TSR=4 --> Prel ~ 30/20 = 1.5
+    //                at WS=40mph and TS=120mph, TSR=3 --> Prel ~ 40/20 = 2
+    // ----------
+    //
+    // After all that... assuming a simple power law works quite well in practice!
+    //
+    // Assuming ^1.0 power dependence: (Empirically, this is too lax for higher WS resulting in too many overspeed full furls)
     // TP @ 20 mph: acos( (20/20) ) = 0.0 deg
     // TP @ 22 mph: acos( (20/22) ) = 24.6 deg (L1)
     // TP @ 24 mph: acos( (20/24) ) = 33.6 deg (L2)
@@ -978,6 +992,32 @@ void furlctl1() {
     // TP @ 36 mph: acos( (20/36) ) = 56.3 deg (L8)
     // TP @ 38 mph: acos( (20/38) ) = 58.2 deg (L9)
     // TP @ 40 mph: acos( (20/40) ) = 60.0 deg (L10)
+
+    // Assuming ^1.5 power dependence: (This is a nice compromise)
+    // TP @ 20 mph: acos( (20/20)^1.5 ) = 0.0 deg
+    // TP @ 22 mph: acos( (20/22)^1.5 ) = 29.9 deg (L1)
+    // TP @ 24 mph: acos( (20/24)^1.5 ) = 40.5 deg (L2)
+    // TP @ 26 mph: acos( (20/26)^1.5 ) = 47.6 deg (L3)
+    // TP @ 28 mph: acos( (20/28)^1.5 ) = 52.9 deg (L4)
+    // TP @ 30 mph: acos( (20/30)^1.5 ) = 57.0 deg (L5)
+    // TP @ 32 mph: acos( (20/32)^1.5 ) = 60.4 deg (L6)
+    // TP @ 34 mph: acos( (20/34)^1.5 ) = 63.2 deg (L7)
+    // TP @ 36 mph: acos( (20/36)^1.5 ) = 65.5 deg (L8)
+    // TP @ 38 mph: acos( (20/38)^1.5 ) = 67.6 deg (L9)
+    // TP @ 40 mph: acos( (20/40)^1.5 ) = 69.3 deg (L10)
+
+    // Assuming ^2.0 power dependence: (This is the calculated equation, but empirically, it's a little too aggressive... due to unaccounted for inefficiencies?)
+    // TP @ 20 mph: acos( (20/20)^2 ) = 0.0 deg
+    // TP @ 22 mph: acos( (20/22)^2 ) = 34.3 deg (L1)
+    // TP @ 24 mph: acos( (20/24)^2 ) = 46.0 deg (L2)
+    // TP @ 26 mph: acos( (20/26)^2 ) = 53.7 deg (L3)
+    // TP @ 28 mph: acos( (20/28)^2 ) = 59.3 deg (L4)
+    // TP @ 30 mph: acos( (20/30)^2 ) = 63.6 deg (L5)
+    // TP @ 32 mph: acos( (20/32)^2 ) = 67.0 deg (L6)
+    // TP @ 34 mph: acos( (20/34)^2 ) = 69.8 deg (L7)
+    // TP @ 36 mph: acos( (20/36)^2 ) = 72.0 deg (L8)
+    // TP @ 38 mph: acos( (20/38)^2 ) = 73.9 deg (L9)
+    // TP @ 40 mph: acos( (20/40)^2 ) = 75.5 deg (L10)
 
     // Next, we add a safety constraint based on very-near-future predicted turbine RPM (predRPM, calculated above) and combine that with
     // the WSgte[22]...WSgte[40] thresholds to set a predicted tail position (predTP).
@@ -995,21 +1035,22 @@ void furlctl1() {
     // 472rpm-->2905W (2022-04-28), 231.5V, 12.55A
     //
     // rev1 BLADES:
-    // 497 rpm --> 3037W, 300.7V, 10.10A (2022-07-18)
+    // 497rpm-->3037W, 300.7V, 10.10A (2022-07-18)
+    // 511rpm-->3358W (2023-02-03)
     // 
     // NOTE: We're only using WSgte[22]...WSgte[40] here. No need to calculate unused array elements.
     if ( (predRPM  < (380*1024)) && !WSgte[22] ) predTP = 0;                   // L0, && is necessary here
-    if ( (predRPM >= (380*1024)) ||  WSgte[22] ) predTP = (24.6*2000*62)/360;  // L1, deg --> usteps
-    if ( (predRPM >= (390*1024)) ||  WSgte[24] ) predTP = (33.6*2000*62)/360;  // L2
-    if ( (predRPM >= (400*1024)) ||  WSgte[26] ) predTP = (39.7*2000*62)/360;  // L3
-    if ( (predRPM >= (410*1024)) ||  WSgte[28] ) predTP = (44.4*2000*62)/360;  // L4
-    if ( (predRPM >= (420*1024)) ||  WSgte[30] ) predTP = (48.2*2000*62)/360;  // L5
-    if ( (predRPM >= (430*1024)) ||  WSgte[32] ) predTP = (51.3*2000*62)/360;  // L6
-    if ( (predRPM >= (440*1024)) ||  WSgte[34] ) predTP = (54.0*2000*62)/360;  // L7
-    if ( (predRPM >= (450*1024)) ||  WSgte[36] ) predTP = (56.3*2000*62)/360;  // L8
-    if ( (predRPM >= (460*1024)) ||  WSgte[38] ) predTP = (58.2*2000*62)/360;  // L9
-    if ( (predRPM >= (470*1024)) ||  WSgte[40] ) predTP = (60.0*2000*62)/360;  // L10
-    
+    if ( (predRPM >= (380*1024)) ||  WSgte[22] ) predTP = (29.9*2000*62)/360;  // L1, deg --> usteps
+    if ( (predRPM >= (390*1024)) ||  WSgte[24] ) predTP = (40.5*2000*62)/360;  // L2
+    if ( (predRPM >= (400*1024)) ||  WSgte[26] ) predTP = (47.6*2000*62)/360;  // L3
+    if ( (predRPM >= (410*1024)) ||  WSgte[28] ) predTP = (52.9*2000*62)/360;  // L4
+    if ( (predRPM >= (420*1024)) ||  WSgte[30] ) predTP = (57.0*2000*62)/360;  // L5
+    if ( (predRPM >= (430*1024)) ||  WSgte[32] ) predTP = (60.4*2000*62)/360;  // L6
+    if ( (predRPM >= (440*1024)) ||  WSgte[34] ) predTP = (63.2*2000*62)/360;  // L7
+    if ( (predRPM >= (450*1024)) ||  WSgte[36] ) predTP = (65.5*2000*62)/360;  // L8
+    if ( (predRPM >= (460*1024)) ||  WSgte[38] ) predTP = (67.6*2000*62)/360;  // L9
+    if ( (predRPM >= (470*1024)) ||  WSgte[40] ) predTP = (69.3*2000*62)/360;  // L10
+
     // Save some vals in global print_ vars for slow printing in wwe.ino
     print_TP_timer = TP_timer;
     print_predTP = (predTP*360.)/(2000*62);

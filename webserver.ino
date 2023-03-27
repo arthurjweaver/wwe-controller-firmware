@@ -25,16 +25,17 @@ void initServer(){
   webserver.begin();
   
   // Register commands for web server
-  webserver.setDefaultCommand(&waveCmd);
+  webserver.setDefaultCommand(&failCmd);               // Default response from webserver if no specific command is given: server:port/<command>
   webserver.setFailureCommand(&failCmd);
-  webserver.addCommand("wave.json", &waveCmd);         // Return waveforms
-  webserver.addCommand("measure.json", &measureCmd);   // Return collected RMS values
-  webserver.addCommand("setvals.json", &setvalsCmd);   // Set values for testing
-  webserver.addCommand("windstream", &windStreamCmd);  // Send "stream" command to Etesian
-  webserver.addCommand("windsetcfg", &windCfgCmd);     // Retrieve Etesian configuration
-  webserver.addCommand("parms.html", &parmCmd);        // ***Show a web page with all parms***
-  webserver.addCommand("status.html", &statusCmd);     // Show a web page with analog channel vals, updated every 5 sec
-  webserver.addCommand("modbus1.html", &modbus1Cmd);   // Show a web page with all modbus 'fast' channel vals, updated every 5 sec
+  webserver.addCommand("parms.html", &parmCmd);        // Show a web form with controller operating parms
+  // Disable everything else:
+  //webserver.addCommand("wave.json", &waveCmd);         // Return waveforms
+  //webserver.addCommand("measure.json", &measureCmd);   // Return collected RMS values
+  //webserver.addCommand("setvals.json", &setvalsCmd);   // Set values for testing
+  //webserver.addCommand("windstream", &windStreamCmd);  // Send "stream" command to Etesian
+  //webserver.addCommand("windsetcfg", &windCfgCmd);     // Retrieve Etesian configuration
+  //webserver.addCommand("status.html", &statusCmd);     // Show a web page with analog channel vals, updated every 5 sec
+  //webserver.addCommand("modbus1.html", &modbus1Cmd);   // Show a web page with all modbus 'fast' channel vals, updated every 5 sec
 }
 
 
@@ -96,13 +97,12 @@ void waveCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, 
 }
 
 
-// Return a JSON string that specifies current analog values;
+// Return a JSON string with current analog chanel vals: [{"<channel_name>": <rms_val>, etc.}]
 void measureCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, bool tail_complete){
   dbgPrintln(1, "web: doing measureCmd");
   server.httpSuccess("Content-Type: application/json");
-  // [{"<channel_name>": <rms_val>, etc.}]
   server.printP("[{");
-  for(int i = 0; i < 14; i++){
+  for (int i = 0; i < 14; i++) {
     if(i > 0) server.printP(", ");
     server.printf("\"%s\": %.2f", getChannelName(i), (float)getChannelRMSInt(i) / 1024.0);
   }
@@ -110,13 +110,11 @@ void measureCmd(WebServer &server, WebServer::ConnectionType type, char *url_tai
 }
 
 
-// Get Etesian anemometer config and return it.
+// Get Etesian anemometer config, return it, then restart stream mode
 void windCfgCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, bool tail_complete){
   dbgPrintln(1, "web: doing windConfigCmd");
   server.httpSuccess("Content-Type: text/plain");
-  // [{"<channel_name>": <rms_val>, etc.}]
-  // send escape to knock out of stream mode.
-  Serial2.write(0x1b);
+  Serial2.write(0x1b);  // send escape to knock out of stream mode
   Serial2.println("config");
   while(Serial2.available()){
     int inByte = Serial2.read();
@@ -127,11 +125,10 @@ void windCfgCmd(WebServer &server, WebServer::ConnectionType type, char *url_tai
 }
 
 
-// Get Etesian anemometer config and return it.
+// Put Etesian anemometer into stream mode
 void windStreamCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, bool tail_complete){
   dbgPrintln(1, "web: doing windStreamCmd");
   server.httpSuccess("Content-Type: text/plain");
-  // [{"<channel_name>": <rms_val>, etc.}]
   Serial2.println("stream");
   server.printP("OK");
 }
@@ -201,11 +198,8 @@ void setvalsCmd(WebServer &server, WebServer::ConnectionType type, char *url_tai
 }
 
 
-// This function creates an HTML *form* containing Controller Operating Parameters and 
-//   handles user-submitted updates to parameter values.
-// Clicking on the form's "Submit" button initiates a POST that sends updated parms back to this code, 
-//   which saves parm vals and writes them to SD.
-
+// This function creates an HTML *form* containing Controller Operating Parameters and handles user-submitted updates to parm vals.
+// Clicking the form's "Submit" button initiates a POST that sends updated parms back to this code which saves parm vals and writes them to SD.
 void parmCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, bool tail_complete) {
   char parmval[40];
 
