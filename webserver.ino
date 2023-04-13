@@ -248,49 +248,48 @@ void parmCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, 
     "</head>"
     "<body>";
     
-    //int i;
-
     server.httpSuccess();     // 
     server.printP(htmlHead);  // print HTML header to server
     server << "<form action='" PREFIX "/parms.html' method='post'>";
     server << "<h1>Controller Operating Parameters</h1>\n";
     server << "<table>";
     
-    // Create an 8-column table: parmname | parmval | parmunits | empty <td>
-    //   Iterate through all the parms, addressing the i'th and (i+1)'th parms, as such:
-    //   <tr><td>i'th parm name</td>
-    //       <td>i'th text input</td>
-    //       <td>(i+1)'th parm name</td>
-    //       <td>(i+1)'th text input</td></tr>
-    for ( int i = 0; i < num_parms; i+=2 ) {
-      Parm* theparmptr = parmary[i];                        // get i'th parm from the parm array - see parms.h
-      char* parmname = theparmptr->parmName();              // get i'th parm name
-      strcpy(parmval , theparmptr->parmVal());              // get i'th parm val as string
+    // Create an 7-column table: parmname | parmval | parmunits | empty col | parmname | parmval | parmunits
+    for ( int i = 0; i < num_parms; i++ ) {
+      Parm* theparmptr = parmary[i];                                  // get i'th parm from the parm array - see parms.h
+      char* parmname = theparmptr->parmName();                        // get i'th parm name
+      strcpy(parmval , theparmptr->parmVal());                        // get i'th parm val as string
       if ( (!strcmp(parmname, "furl_init_windspeed")) || 
-           (!strcmp(parmname, "sc_emer_windspeed")) ) {     // for those parms with MPH units on the parms page...
-        int newval = round(theparmptr->floatVal()*MS2MPH);  //   convert WS parm float val to m/s and round to nearest int
-        sprintf(parmval, "%d", newval);                     //   display WS parm int val
+           (!strcmp(parmname, "sc_emer_windspeed")) ) {               // for those parms with MPH units on the parms page...
+        int newval = round(theparmptr->floatVal()*MS2MPH);            //   convert WS parm float val to m/s and round to nearest int
+        sprintf(parmval, "%d", newval);                               //   display WS parm int val
       }
-      server << "<tr><td>" << theparmptr->parmEngName() << "</td>";                        // print parm display name
-      server << "<td><input type='text' name='" << theparmptr->parmName()  << "' value='" << parmval 
-             << "'></td><td>" << theparmptr->parmUnits() << "</td><td>&nbsp&nbsp</td>\n";  // print an input field with the i'th parm val, then its units
-
-      if ( (i+1) < num_parms) {                             // do the same for the (i+1)'th parm
-        theparmptr = parmary[i+1];
-        strcpy(parmval , theparmptr->parmVal());
-        parmname = theparmptr->parmName();
-        if ( (!strcmp(parmname, "furl_init_windspeed")) || 
-             (!strcmp(parmname, "sc_emer_windspeed")) ) {
-          int newval = round(theparmptr->floatVal()*MS2MPH);
-          sprintf(parmval, "%d", newval);
-        }
-        server << "<td>" << theparmptr->parmEngName()<< "</td>";
-        server << "<td><input type='text' name='" << theparmptr->parmName()   << "' value='" << parmval 
-               << "'></td><td>"<< theparmptr->parmUnits() << "</td></tr>\n";
-      } else {                                              // otherwise, we don't have an (i+1)'th parm to display
-        server << "<td></td><td></td><td></td></tr>\n";
+      if ( !(i%2) ) server << "<tr>";                                            // if i==0,2,4,... start new table row
+      
+      server << "<td>" << theparmptr->parmEngName() << "</td>";                  // print parm display name
+      if ( !strcmp(parmname, "shutdown_state") ) {                               // this parm gets a drop-down selection with *3* options
+        server << "<td><select name='" << theparmptr->parmName() << "'>"; 
+        if ( !strcmp(parmval, "0") ) server << "<option value='0' selected>Normal Operation(0)</option><option value='1'>Shutdown(1)</option><option value='2'>Shutdown(2)</option>";
+        if ( !strcmp(parmval, "1") ) server << "<option value='0'>Normal Operation(0)</option><option value='1' selected>Shutdown(1)</option><option value='2'>Shutdown(2)</option>";
+        if ( !strcmp(parmval, "2") ) server << "<option value='0'>Normal Operation(0)</option><option value='1'>Shutdown(1)</option><option value='2' selected>Shutdown(2)</option>";
+        server << "</td><td></td>";                                              // no parm units needed for <select> drop-downs, so insert <td></td>
+      } else if ( !strcmp(parmname, "ovrd") ||                                   // these parms get a drop-down selection with *2* options
+                  !strcmp(parmname, "hvdl_active") ||
+                  !strcmp(parmname, "pv1_disc") ||
+                  !strcmp(parmname, "pv2_disc") ||
+                  !strcmp(parmname, "wx_override") ) {
+        server << "<td><select name='" << theparmptr->parmName() << "'>"; 
+        if ( !strcmp(parmval, "0") ) server << "<option value='0' selected>No</option><option value='1'>Yes</option>";
+        if ( !strcmp(parmval, "1") ) server << "<option value='0'>No</option><option value='1' selected>Yes</option>";
+        server << "</td><td></td>";
+     } else {                                                                   // all other parms get a text field then parm units
+        server << "<td><input type='text' name='" << theparmptr->parmName()
+               << "' value='" << parmval << "'></td><td>" << theparmptr->parmUnits() << "</td>";
       }
+      
+      !(i%2) ? server << "<td>&nbsp&nbsp</td>" : server << "</tr>\n";            // if i==0,2,4,... insert an empty col, else end row
     }
+
     server << "</table>";                                      // close out the <table>
     server << "<input type='submit' value='Submit'/></form>";  // put a Submit button at the end of the form
     server << "</body>";                                       // close out the <body>
