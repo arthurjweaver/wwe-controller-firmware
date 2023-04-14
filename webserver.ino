@@ -202,6 +202,7 @@ void setvalsCmd(WebServer &server, WebServer::ConnectionType type, char *url_tai
 // Clicking the form's "Submit" button initiates a POST that sends updated parms back to this code which saves parm vals and writes them to SD.
 void parmCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, bool tail_complete) {
   char parmval[40];
+  int write_col = 0;
 
   // Handle user-updated parms from the Controller Operating Parameters web form.
   if ( type == WebServer::POST ) {
@@ -254,7 +255,7 @@ void parmCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, 
     server << "<h1>Controller Operating Parameters</h1>\n";
     server << "<table>";
     
-    // Create an 7-column table: parmname | parmval | parmunits | empty col | parmname | parmval | parmunits
+    // Create a 7-column table: parmname | parmval | parmunits | empty col | parmname | parmval | parmunits
     for ( int i = 0; i < num_parms; i++ ) {
       Parm* theparmptr = parmary[i];                                  // get i'th parm from the parm array - see parms.h
       char* parmname = theparmptr->parmName();                        // get i'th parm name
@@ -264,14 +265,23 @@ void parmCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, 
         int newval = round(theparmptr->floatVal()*MS2MPH);            //   convert WS parm float val to m/s and round to nearest int
         sprintf(parmval, "%d", newval);                               //   display WS parm int val
       }
-      if ( !(i%2) ) server << "<tr>";                                            // if i==0,2,4,... start new table row
+
+      // partition table into parameter groups - see parmdefs.h
+      if ( i==0 ) server << "<tr><td colspan=7 style='text-align:center; background-color:#f0f0f0; font-style:italic'>Turbine control</td></tr><tr>";  // 14 parms, 0-13
+      if ( i==14 ) server << "<tr><td colspan=7 style='text-align:center; background-color:#f0f0f0; font-style:italic'>Network</td></tr><tr>";         // 10 parms, 14-23
+      if ( i==24 ) server << "<tr><td colspan=7 style='text-align:center; background-color:#f0f0f0; font-style:italic'>Diversion load</td></tr><tr>";  // 5 parms, 24-28
+      if ( i==29 ) {
+        write_col = 0;
+        server << "</tr>"; // add </tr> because i is odd
+        server << "<tr><td colspan=7 style='text-align:center; background-color:#f0f0f0; font-style:italic'>Local site</td></tr><tr>";  // 7 parms, 29-35
+      } 
       
       server << "<td>" << theparmptr->parmEngName() << "</td>";                  // print parm display name
       if ( !strcmp(parmname, "shutdown_state") ) {                               // this parm gets a drop-down selection with *3* options
         server << "<td><select name='" << theparmptr->parmName() << "'>"; 
-        if ( !strcmp(parmval, "0") ) server << "<option value='0' selected>Normal Operation(0)</option><option value='1'>Shutdown(1)</option><option value='2'>Shutdown(2)</option>";
-        if ( !strcmp(parmval, "1") ) server << "<option value='0'>Normal Operation(0)</option><option value='1' selected>Shutdown(1)</option><option value='2'>Shutdown(2)</option>";
-        if ( !strcmp(parmval, "2") ) server << "<option value='0'>Normal Operation(0)</option><option value='1'>Shutdown(1)</option><option value='2' selected>Shutdown(2)</option>";
+        if ( !strcmp(parmval, "0") ) server << "<option value='0' selected>Normal Operation</option><option value='1'>Shutdown - routine</option><option value='2'>Shutdown - EMERGENCY</option>";
+        if ( !strcmp(parmval, "1") ) server << "<option value='0'>Normal Operation</option><option value='1' selected>Shutdown - routine</option><option value='2'>Shutdown - EMERGENCY</option>";
+        if ( !strcmp(parmval, "2") ) server << "<option value='0'>Normal Operation</option><option value='1'>Shutdown - routine</option><option value='2' selected>Shutdown - EMERGENCY</option>";
         server << "</td><td></td>";                                              // no parm units needed for <select> drop-downs, so insert <td></td>
       } else if ( !strcmp(parmname, "ovrd") ||                                   // these parms get a drop-down selection with *2* options
                   !strcmp(parmname, "hvdl_active") ||
@@ -286,13 +296,16 @@ void parmCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, 
         server << "<td><input type='text' name='" << theparmptr->parmName()
                << "' value='" << parmval << "'></td><td>" << theparmptr->parmUnits() << "</td>";
       }
-      
-      !(i%2) ? server << "<td>&nbsp&nbsp</td>" : server << "</tr>\n";            // if i==0,2,4,... insert an empty col, else end row
+
+      write_col==0 ? server << "<td>&nbsp&nbsp</td>" : server << "</tr>\n";  // if we're writing to column 0, add empty <td>, otherwise end the row
+      write_col==1 ? write_col=0 : write_col=1;  // toggle 
     }
 
-    server << "</table>";                                      // close out the <table>
-    server << "<input type='submit' value='Submit'/></form>";  // put a Submit button at the end of the form
-    server << "</body>";                                       // close out the <body>
+    server << "<tr><td colspan=7>&nbsp;</td></tr>";  // insert blank row
+    server << "<tr><td colspan=7><input type='submit' value='Submit' style='color:white; background-color:red; width:100%'/></td></tr>";  // put Submit button in last table row
+    server << "</table>";  // close <table>
+    server << "</form>";   // close <form>
+    server << "</body>";   // close <body>
   }
 }
 
